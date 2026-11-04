@@ -1,0 +1,2442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIND.EXE - Terminal Cognitive Assessment</title>
+  <meta name="description" content="A retro terminal-style cognitive puzzle and mental arithmetic game.">
+  <style>
+    :root {
+      --bg-color: #060907;
+      --pcb-color: #07100a;
+      --term-bg: rgba(8, 14, 10, 0.93);
+      --term-border: #1d5534;
+      --text-green: #33ff66;
+      --text-dim: #1e824c;
+      --text-amber: #ffb000;
+      --text-cyan: #00e5ff;
+      --text-red: #ff3344;
+      --glow-green: 0 0 8px rgba(51, 255, 102, 0.45), 0 0 16px rgba(51, 255, 102, 0.2);
+      --glow-amber: 0 0 8px rgba(255, 176, 0, 0.45);
+      --glow-cyan: 0 0 8px rgba(0, 229, 255, 0.45);
+      --font-mono: "Courier New", Courier, "Lucida Console", Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(circle at 50% 50%, rgba(13, 35, 22, 0.45) 0%, rgba(4, 8, 5, 0.96) 100%),
+        linear-gradient(rgba(20, 50, 30, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 50, 30, 0.1) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+      color: var(--text-green);
+      font-family: var(--font-mono);
+      font-size: 15px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 16px 20px 24px;
+      position: relative;
+      overflow-x: hidden;
+      text-shadow: var(--glow-green);
+    }
+
+    /* =========================================================================
+       MOTHERBOARD & CIRCUIT BOARD BACKGROUND ENVIRONMENT
+       ========================================================================= */
+    .motherboard-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    /* Ambient PCB Trace Grid */
+    .pcb-grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0.18;
+      background-image: 
+        radial-gradient(circle at 10px 10px, #1a4d2e 1.5px, transparent 1.5px),
+        linear-gradient(to right, rgba(26, 77, 46, 0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(26, 77, 46, 0.25) 1px, transparent 1px);
+      background-size: 40px 40px, 40px 40px, 40px 40px;
+    }
+
+    /* SVG Circuit Layer */
+    .circuit-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    .trace-dim {
+      stroke: #123b22;
+      stroke-width: 1.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .trace-glow {
+      stroke: #257d47;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 3px rgba(51, 255, 102, 0.3));
+    }
+
+    .trace-cyan {
+      stroke: #0a4f59;
+      stroke-width: 1.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 3px rgba(0, 229, 255, 0.25));
+    }
+
+    .pad-node {
+      fill: #0c1a12;
+      stroke: #257d47;
+      stroke-width: 1.5;
+    }
+
+    .pad-node.active-green {
+      fill: #33ff66;
+      filter: drop-shadow(0 0 5px rgba(51, 255, 102, 0.8));
+    }
+
+    .pad-node.active-amber {
+      fill: #ffb000;
+      filter: drop-shadow(0 0 5px rgba(255, 176, 0, 0.8));
+    }
+
+    .pad-node.active-cyan {
+      fill: #00e5ff;
+      filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.8));
+    }
+
+    /* Animated Circuit Current Pulses */
+    .pulse-path {
+      stroke: #33ff66;
+      stroke-width: 2.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-dasharray: 20 280;
+      filter: drop-shadow(0 0 6px #33ff66);
+      animation: traceCurrent 6s linear infinite;
+    }
+
+    .pulse-path-reverse {
+      stroke: #00e5ff;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-dasharray: 18 320;
+      filter: drop-shadow(0 0 6px #00e5ff);
+      animation: traceCurrentRev 8s linear infinite;
+    }
+
+    .pulse-path-fast {
+      stroke: #33ff66;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-dasharray: 15 220;
+      filter: drop-shadow(0 0 5px #33ff66);
+      animation: traceCurrent 4.5s linear infinite;
+    }
+
+    @keyframes traceCurrent {
+      0% { stroke-dashoffset: 600; }
+      100% { stroke-dashoffset: 0; }
+    }
+
+    @keyframes traceCurrentRev {
+      0% { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: 680; }
+    }
+
+    /* Hardware ICs & Microchips on Motherboard */
+    .hardware-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .chip {
+      position: absolute;
+      background: #09120c;
+      border: 1px solid #1a4d2e;
+      border-radius: 3px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.85), inset 0 0 8px rgba(26, 77, 46, 0.35);
+      color: #216d3f;
+      font-size: 9px;
+      letter-spacing: 1px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      text-shadow: none;
+    }
+
+    .chip-notch {
+      position: absolute;
+      width: 10px;
+      height: 5px;
+      background: #050a06;
+      border: 1px solid #1a4d2e;
+      border-top: none;
+      border-radius: 0 0 5px 5px;
+      top: -1px;
+    }
+
+    /* Chip Pins */
+    .chip-pins-left, .chip-pins-right {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: calc(100% - 16px);
+      top: 8px;
+    }
+    .chip-pins-left { left: -6px; }
+    .chip-pins-right { right: -6px; }
+
+    .chip-pin {
+      width: 6px;
+      height: 3px;
+      background: #204c32;
+      border-radius: 1px;
+      box-shadow: 0 0 2px rgba(32, 76, 50, 0.5);
+    }
+
+    /* Large Processor - Top Right */
+    .chip-cpu-corner {
+      top: 32px;
+      right: 36px;
+      width: 120px;
+      height: 120px;
+      border: 1.5px solid #23653d;
+      background: radial-gradient(circle at center, #0c1c13 0%, #060b08 100%);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.9), 0 0 20px rgba(26, 77, 46, 0.25);
+    }
+    .chip-cpu-corner .cpu-die {
+      width: 64px;
+      height: 64px;
+      border: 1px dashed #2e8b53;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(14, 34, 23, 0.6);
+      border-radius: 2px;
+    }
+    .cpu-label {
+      color: #33ff66;
+      font-size: 9px;
+      font-weight: bold;
+      opacity: 0.85;
+      letter-spacing: 1px;
+    }
+    .cpu-sub {
+      color: #1a7842;
+      font-size: 7.5px;
+      margin-top: 2px;
+    }
+
+    /* Memory / Secondary Processor - Bottom Left */
+    .chip-vpu-corner {
+      bottom: 30px;
+      left: 36px;
+      width: 110px;
+      height: 90px;
+      border: 1px solid #1a5e37;
+    }
+
+    /* Small SMD Chips & Capacitors */
+    .chip-smd-1 {
+      top: 25%;
+      left: 38px;
+      width: 68px;
+      height: 44px;
+    }
+    .chip-smd-2 {
+      bottom: 28%;
+      right: 42px;
+      width: 72px;
+      height: 50px;
+    }
+
+    /* Cylindrical Electrolytic Capacitors */
+    .capacitor-can {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #1d402b 0%, #08110b 80%);
+      border: 1.5px solid #27623d;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.8), inset 0 0 4px rgba(51, 255, 102, 0.2);
+    }
+    .capacitor-can::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 1.5px;
+      background: #11291b;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .cap-1 { top: 168px; right: 85px; }
+    .cap-2 { top: 168px; right: 52px; }
+    .cap-3 { bottom: 130px; left: 88px; }
+
+    /* Surface Mount Resistor Arrays */
+    .resistor-block {
+      position: absolute;
+      background: #0d1711;
+      border: 1px solid #1d452d;
+      border-radius: 2px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 2px;
+    }
+    .resistor-block .r-band {
+      width: 4px;
+      height: 80%;
+      background: #255839;
+      border-radius: 1px;
+    }
+    .res-1 { top: 62%; left: 45px; width: 44px; height: 16px; }
+    .res-2 { top: 40%; right: 48px; width: 44px; height: 16px; }
+
+    /* Blinking Status LEDs */
+    .motherboard-led {
+      position: absolute;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.6);
+    }
+
+    .led-green {
+      background: #33ff66;
+      box-shadow: 0 0 8px #33ff66, 0 0 16px rgba(51, 255, 102, 0.6);
+      animation: ledBlink 3.2s infinite ease-in-out;
+    }
+
+    .led-green-alt {
+      background: #33ff66;
+      box-shadow: 0 0 8px #33ff66;
+      animation: ledBlink 2.1s infinite 0.8s ease-in-out;
+    }
+
+    .led-amber {
+      background: #ffb000;
+      box-shadow: 0 0 8px #ffb000, 0 0 14px rgba(255, 176, 0, 0.5);
+      animation: ledBlink 4s infinite 1.4s ease-in-out;
+    }
+
+    .led-cyan {
+      background: #00e5ff;
+      box-shadow: 0 0 8px #00e5ff, 0 0 14px rgba(0, 229, 255, 0.5);
+      animation: ledPulse 2.8s infinite ease-in-out;
+    }
+
+    @keyframes ledBlink {
+      0%, 100% { opacity: 0.95; transform: scale(1); }
+      45%, 55% { opacity: 0.2; transform: scale(0.9); }
+      70% { opacity: 1; }
+      85% { opacity: 0.3; }
+    }
+
+    @keyframes ledPulse {
+      0%, 100% { opacity: 0.9; }
+      50% { opacity: 0.35; }
+    }
+
+    /* Ambient CRT Scanline & Vignette Overlays */
+    .crt-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 100;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.35) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.03),
+        rgba(0, 255, 0, 0.01),
+        rgba(0, 0, 255, 0.03)
+      );
+      background-size: 100% 3px, 6px 100%;
+    }
+
+    .crt-vignette {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 101;
+      background: radial-gradient(circle at center, transparent 48%, rgba(2, 6, 3, 0.65) 85%, rgba(0, 2, 1, 0.92) 100%);
+    }
+
+    /* =========================================================================
+       WEBSITE BRANDING & TITLE HEADER
+       ========================================================================= */
+    .site-masthead {
+      position: relative;
+      z-index: 25;
+      text-align: center;
+      margin-bottom: 14px;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .site-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: #33ff66;
+      text-transform: uppercase;
+      margin: 0;
+      line-height: 1.1;
+      text-shadow: 
+        0 0 10px rgba(51, 255, 102, 0.7),
+        0 0 25px rgba(51, 255, 102, 0.4),
+        0 0 40px rgba(51, 255, 102, 0.2);
+      animation: titleGlowPulse 4s infinite ease-in-out;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .site-title .title-bracket {
+      color: var(--text-dim);
+      font-weight: 300;
+      opacity: 0.65;
+    }
+
+    .site-subtitle {
+      font-size: clamp(9px, 1.3vw, 12px);
+      font-weight: 600;
+      letter-spacing: 3px;
+      color: var(--text-cyan);
+      text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+      text-transform: uppercase;
+      opacity: 0.9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .site-subtitle::before,
+    .site-subtitle::after {
+      content: "";
+      display: inline-block;
+      width: 18px;
+      height: 1px;
+      background: var(--text-cyan);
+      opacity: 0.5;
+    }
+
+    @keyframes titleGlowPulse {
+      0%, 100% {
+        text-shadow: 
+          0 0 8px rgba(51, 255, 102, 0.6),
+          0 0 20px rgba(51, 255, 102, 0.35);
+        opacity: 0.98;
+      }
+      50% {
+        text-shadow: 
+          0 0 14px rgba(51, 255, 102, 0.9),
+          0 0 32px rgba(51, 255, 102, 0.55),
+          0 0 50px rgba(51, 255, 102, 0.3);
+        opacity: 1;
+      }
+      72% {
+        opacity: 0.92;
+      }
+      74% {
+        opacity: 1;
+      }
+    }
+
+    /* RAM Stick Modules */
+    .ram-module {
+      position: absolute;
+      background: #09150d;
+      border: 1px solid #1a5e37;
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.85);
+      z-index: 4;
+    }
+
+    .ram-chips {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 80%;
+      align-items: center;
+    }
+
+    .ram-ic {
+      width: 100%;
+      height: 14px;
+      background: #050b07;
+      border: 1px solid #1f4a2d;
+      border-radius: 1px;
+    }
+
+    .ram-gold-edge {
+      width: 100%;
+      height: 6px;
+      background: repeating-linear-gradient(
+        90deg,
+        #b58900,
+        #b58900 2px,
+        #112918 2px,
+        #112918 4px
+      );
+      border-top: 1px solid #1a4d2e;
+    }
+
+    .ram-stick-1 {
+      top: 160px;
+      left: 18px;
+      width: 28px;
+      height: 150px;
+    }
+
+    .ram-stick-2 {
+      top: 160px;
+      left: 52px;
+      width: 28px;
+      height: 150px;
+    }
+
+    /* Crystal Oscillator */
+    .oscillator {
+      position: absolute;
+      width: 32px;
+      height: 16px;
+      background: linear-gradient(135deg, #1b3826 0%, #0c1c13 100%);
+      border: 1.5px solid #287346;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      font-size: 6px;
+      color: #33ff66;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 0.5px;
+      z-index: 4;
+    }
+
+    .osc-1 {
+      top: 325px;
+      right: 130px;
+    }
+
+    /* Additional Hardware Chips */
+    .chip-southbridge {
+      bottom: 40px;
+      right: 50px;
+      width: 85px;
+      height: 85px;
+      border: 1.5px solid #1a5e37;
+      background: radial-gradient(circle at center, #0e2016 0%, #070f0a 100%);
+    }
+
+    .chip-southbridge .sb-inner {
+      width: 48px;
+      height: 48px;
+      border: 1px solid #237847;
+      background: #09170e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Respect reduced motion preference or toggle */
+    body.no-effects .crt-overlay,
+    body.no-effects .crt-vignette,
+    body.no-effects .pulse-path,
+    body.no-effects .pulse-path-reverse,
+    body.no-effects .pulse-path-fast,
+    body.no-effects .motherboard-led,
+    body.no-effects .site-title,
+    @media (prefers-reduced-motion: reduce) {
+      .crt-overlay, .crt-vignette {
+        display: none !important;
+      }
+      body {
+        text-shadow: none !important;
+      }
+      .terminal-title .status-dot,
+      .pulse-path, .pulse-path-reverse, .pulse-path-fast,
+      .motherboard-led,
+      .site-title {
+        animation: none !important;
+      }
+    }
+
+    /* Terminal Container - Enlarged to 75-85% width & expanded vertical height */
+    .terminal-container {
+      width: 82vw;
+      max-width: 1300px;
+      min-width: 320px;
+      height: calc(96vh - 90px);
+      min-height: 540px;
+      max-height: 980px;
+      background: var(--term-bg);
+      border: 1.5px solid var(--term-border);
+      border-radius: 8px;
+      box-shadow: 
+        0 0 0 1px rgba(26, 77, 46, 0.4),
+        0 0 40px rgba(18, 60, 36, 0.6),
+        0 25px 70px rgba(0, 0, 0, 0.98),
+        inset 0 0 35px rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      z-index: 20;
+      backdrop-filter: blur(5px);
+    }
+
+    /* Chassis Edge Connectors & Mount Brackets */
+    .terminal-container::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--text-green), transparent);
+      opacity: 0.45;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Header Bar */
+    .terminal-header {
+      background: #0f1c14;
+      border-bottom: 1px solid var(--term-border);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      user-select: none;
+    }
+
+    .terminal-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-green);
+    }
+
+    .terminal-title .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--text-green);
+      border-radius: 50%;
+      box-shadow: var(--glow-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .terminal-controls {
+      display: flex;
+      gap: 12px;
+      color: var(--text-dim);
+      font-size: 12px;
+      align-items: center;
+    }
+
+    .anim-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--term-border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .anim-toggle-btn:hover {
+      color: var(--text-green);
+      border-color: var(--text-green);
+    }
+
+    /* Status Bar */
+    .status-panel {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: rgba(14, 28, 20, 0.7);
+      border-bottom: 1px dashed var(--term-border);
+      padding: 8px 16px;
+      font-size: 13px;
+      gap: 12px;
+    }
+
+    .status-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status-value {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--text-cyan);
+      text-shadow: var(--glow-cyan);
+    }
+
+    /* Terminal Body / Output Log */
+    .terminal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--term-border) transparent;
+    }
+
+    .terminal-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .terminal-body::-webkit-scrollbar-thumb {
+      background: var(--term-border);
+      border-radius: 3px;
+    }
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.45;
+    }
+
+    .log-user {
+      color: var(--text-cyan);
+      text-shadow: var(--glow-cyan);
+    }
+
+    .log-amber {
+      color: var(--text-amber);
+      text-shadow: var(--glow-amber);
+    }
+
+    .log-dim {
+      color: var(--text-dim);
+      text-shadow: none;
+    }
+
+    .log-green {
+      color: var(--text-green);
+      text-shadow: var(--glow-green);
+    }
+
+    .log-red {
+      color: var(--text-red);
+      text-shadow: 0 0 8px rgba(255, 51, 68, 0.4);
+    }
+
+    .log-box {
+      border: 1px solid var(--term-border);
+      padding: 10px 14px;
+      margin: 4px 0;
+      background: rgba(18, 38, 26, 0.35);
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Command Prompt Input Area */
+    .terminal-input-bar {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: #09130d;
+      border-top: 1px solid var(--term-border);
+      gap: 10px;
+    }
+
+    .prompt-label {
+      color: var(--text-green);
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      user-select: none;
+    }
+
+    .input-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    #cmd-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-green);
+      font-family: var(--font-mono);
+      font-size: 15px;
+      text-shadow: var(--glow-green);
+      caret-color: var(--text-green);
+    }
+
+    #cmd-input::placeholder {
+      color: rgba(51, 255, 102, 0.25);
+    }
+
+    /* Mobile & Tablet Responsive adjustments */
+    @media (max-width: 1024px) {
+      .terminal-container {
+        width: 90vw;
+        height: calc(96vh - 80px);
+      }
+      .ram-module, .chip-southbridge, .oscillator {
+        opacity: 0.3;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .chip-cpu-corner, .chip-vpu-corner, .chip-smd-1, .chip-smd-2, .capacitor-can, .resistor-block, .ram-module, .chip-southbridge, .oscillator {
+        opacity: 0.25;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 4px;
+      }
+      .site-masthead {
+        margin-bottom: 6px;
+      }
+      .site-title {
+        font-size: 26px;
+        letter-spacing: 4px;
+      }
+      .site-subtitle {
+        font-size: 8px;
+        letter-spacing: 1.5px;
+      }
+      .motherboard-bg {
+        opacity: 0.2;
+      }
+      .terminal-container {
+        width: 100vw;
+        height: calc(100vh - 65px);
+        min-height: 0;
+        max-height: none;
+        border-radius: 0;
+        border: none;
+      }
+      .status-panel {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .terminal-body {
+        font-size: 13px;
+        padding: 12px;
+      }
+      #cmd-input {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay"></div>
+  <div class="crt-vignette"></div>
+
+  <!-- Motherboard & Circuit Environment Layer -->
+  <div class="motherboard-bg" aria-hidden="true">
+    <div class="pcb-grid"></div>
+
+    <!-- Scalable Motherboard Trace Network with glowing vias and pulse currents -->
+    <svg class="circuit-svg" viewBox="0 0 1600 1000" preserveAspectRatio="none">
+      <defs>
+        <pattern id="diag-hatch" width="8" height="8" patternUnits="userSpaceOnUse">
+          <path d="M-1,1 l2,-2 M0,8 l8,-8 M7,9 l2,-2" stroke="#133621" stroke-width="0.8" />
+        </pattern>
+      </defs>
+
+      <!-- Substrate Copper Ground Planes -->
+      <polygon points="0,0 260,0 160,100 0,100" fill="url(#diag-hatch)" opacity="0.4" />
+      <polygon points="1600,0 1340,0 1440,100 1600,100" fill="url(#diag-hatch)" opacity="0.4" />
+      <polygon points="0,1000 240,1000 140,900 0,900" fill="url(#diag-hatch)" opacity="0.4" />
+      <polygon points="1600,1000 1360,1000 1460,900 1600,900" fill="url(#diag-hatch)" opacity="0.4" />
+
+      <!-- Top Left Bus Traces -->
+      <path class="trace-dim" d="M 0 50 L 120 50 L 180 110 L 280 110 L 320 150 L 320 220" />
+      <path class="trace-glow" d="M 0 70 L 110 70 L 170 130 L 290 130 L 330 170 L 330 310" />
+      <path class="trace-dim" d="M 0 90 L 100 90 L 160 150 L 260 150 L 290 180 L 290 350" />
+      <path class="trace-cyan" d="M 50 0 L 50 140 L 90 180 L 90 320 L 140 370 L 220 370" />
+      <path class="trace-dim" d="M 70 0 L 70 120 L 110 160 L 110 280" />
+
+      <!-- Top Center Bus Header -->
+      <path class="trace-dim" d="M 500 0 L 500 40 L 540 80 L 720 80" />
+      <path class="trace-glow" d="M 540 0 L 540 30 L 580 70 L 750 70" />
+      <path class="trace-dim" d="M 1060 0 L 1060 40 L 1020 80 L 880 80" />
+      <path class="trace-glow" d="M 1100 0 L 1100 30 L 1060 70 L 850 70" />
+
+      <!-- Top Right CPU Bus Array -->
+      <path class="trace-glow" d="M 1600 60 L 1480 60 L 1420 120 L 1320 120 L 1270 170 L 1270 280" />
+      <path class="trace-dim" d="M 1600 80 L 1490 80 L 1440 130 L 1340 130 L 1300 170 L 1300 320" />
+      <path class="trace-cyan" d="M 1520 0 L 1520 100 L 1470 150 L 1470 300 L 1420 350 L 1340 350" />
+      <path class="trace-dim" d="M 1550 0 L 1550 80 L 1510 120 L 1510 260" />
+      <path class="trace-dim" d="M 1600 190 L 1460 190 L 1410 240 L 1320 240" />
+
+      <!-- Left Flank Interconnects -->
+      <path class="trace-glow" d="M 0 380 L 120 380 L 160 420 L 160 560 L 110 610 L 0 610" />
+      <path class="trace-dim" d="M 0 410 L 90 410 L 130 450 L 130 530 L 80 580 L 0 580" />
+      <path class="trace-cyan" d="M 0 490 L 70 490 L 100 520 L 100 680 L 150 730 L 240 730" />
+      <path class="trace-dim" d="M 0 670 L 80 670 L 140 730 L 140 820 L 190 870 L 270 870" />
+
+      <!-- Right Flank Interconnects -->
+      <path class="trace-glow" d="M 1600 420 L 1460 420 L 1410 470 L 1410 620 L 1460 670 L 1600 670" />
+      <path class="trace-dim" d="M 1600 450 L 1490 450 L 1440 500 L 1440 580 L 1490 630 L 1600 630" />
+      <path class="trace-cyan" d="M 1600 530 L 1510 530 L 1470 570 L 1470 720 L 1410 780 L 1320 780" />
+      <path class="trace-dim" d="M 1600 750 L 1490 750 L 1430 810 L 1430 890 L 1380 940 L 1290 940" />
+
+      <!-- Bottom Left Memory Traces -->
+      <path class="trace-glow" d="M 0 830 L 110 830 L 180 900 L 310 900 L 350 940 L 460 940" />
+      <path class="trace-dim" d="M 0 860 L 90 860 L 150 920 L 280 920 L 320 960 L 430 960" />
+      <path class="trace-cyan" d="M 180 1000 L 180 930 L 230 880 L 340 880 L 390 930 L 520 930" />
+      <path class="trace-dim" d="M 230 1000 L 230 950 L 270 910 L 360 910" />
+
+      <!-- Bottom Right Traces -->
+      <path class="trace-glow" d="M 1600 860 L 1480 860 L 1420 920 L 1280 920 L 1230 970 L 1120 970" />
+      <path class="trace-dim" d="M 1600 890 L 1510 890 L 1450 950 L 1310 950 L 1260 1000" />
+      <path class="trace-cyan" d="M 1420 1000 L 1420 930 L 1370 880 L 1250 880 L 1200 930 L 1080 930" />
+
+      <!-- Dynamic Current Pulses Traveling along Traces -->
+      <path class="pulse-path" d="M 0 70 L 110 70 L 170 130 L 290 130 L 330 170 L 330 310" />
+      <path class="pulse-path-reverse" d="M 1600 60 L 1480 60 L 1420 120 L 1320 120 L 1270 170 L 1270 280" />
+      <path class="pulse-path-fast" d="M 0 380 L 120 380 L 160 420 L 160 560 L 110 610 L 0 610" />
+      <path class="pulse-path" d="M 1600 530 L 1510 530 L 1470 570 L 1470 720 L 1410 780 L 1320 780" />
+      <path class="pulse-path-reverse" d="M 0 830 L 110 830 L 180 900 L 310 900 L 350 940 L 460 940" />
+      <path class="pulse-path" d="M 1600 860 L 1480 860 L 1420 920 L 1280 920 L 1230 970 L 1120 970" />
+
+      <!-- Motherboard Solder Vias & Golden Terminal Connection Nodes -->
+      <circle cx="120" cy="50" r="3.5" class="pad-node" />
+      <circle cx="180" cy="110" r="3.5" class="pad-node active-green" />
+      <circle cx="320" cy="220" r="4" class="pad-node" />
+      <circle cx="330" cy="310" r="4.5" class="pad-node active-green" />
+      <circle cx="290" cy="350" r="3" class="pad-node" />
+      <circle cx="220" cy="370" r="4" class="pad-node active-cyan" />
+
+      <circle cx="1420" cy="120" r="3.5" class="pad-node" />
+      <circle cx="1270" cy="280" r="4.5" class="pad-node active-amber" />
+      <circle cx="1300" cy="320" r="3.5" class="pad-node" />
+      <circle cx="1340" cy="350" r="4" class="pad-node active-cyan" />
+      <circle cx="1320" cy="240" r="3.5" class="pad-node" />
+
+      <circle cx="160" cy="560" r="4" class="pad-node active-green" />
+      <circle cx="240" cy="730" r="4" class="pad-node active-cyan" />
+      <circle cx="270" cy="870" r="3.5" class="pad-node" />
+
+      <circle cx="1410" cy="620" r="4" class="pad-node active-green" />
+      <circle cx="1320" cy="780" r="4.5" class="pad-node active-cyan" />
+      <circle cx="1290" cy="940" r="3.5" class="pad-node" />
+
+      <circle cx="460" cy="940" r="4" class="pad-node active-green" />
+      <circle cx="520" cy="930" r="4" class="pad-node active-cyan" />
+      <circle cx="1120" cy="970" r="4" class="pad-node active-green" />
+      <circle cx="1080" cy="930" r="4" class="pad-node active-cyan" />
+
+      <!-- Silkscreen Motherboard Technical Markings -->
+      <text x="340" y="325" fill="#1c5533" font-family="monospace" font-size="9" letter-spacing="1">BUS_CH_01</text>
+      <text x="1230" y="295" fill="#1c5533" font-family="monospace" font-size="9" letter-spacing="1">HOST_CLK</text>
+      <text x="150" y="745" fill="#154228" font-family="monospace" font-size="8" letter-spacing="1">TP_RX_7</text>
+      <text x="1330" y="795" fill="#154228" font-family="monospace" font-size="8" letter-spacing="1">TP_TX_4</text>
+      <text x="470" y="955" fill="#154228" font-family="monospace" font-size="8" letter-spacing="1">RAM_BANK0</text>
+      <text x="1130" y="985" fill="#154228" font-family="monospace" font-size="8" letter-spacing="1">CORE_PWR</text>
+    </svg>
+
+    <!-- Physical Hardware Integrated Components Layer -->
+    <div class="hardware-layer">
+      <!-- High-End Microprocessor (Top Right) -->
+      <div class="chip chip-cpu-corner" title="PRIMARY SYNAPSE PROCESSOR">
+        <div class="chip-notch"></div>
+        <div class="cpu-die">
+          <span class="cpu-label">NEURAL</span>
+          <span class="cpu-sub">NP-6400</span>
+        </div>
+        <div class="chip-pins-left">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+        <div class="chip-pins-right">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+      </div>
+
+      <!-- Secondary Arithmetic Logic Controller (Bottom Left) -->
+      <div class="chip chip-vpu-corner" title="COGNITIVE BUS CONTROLLER">
+        <div class="chip-notch"></div>
+        <span style="font-weight: bold; color: #2ea861; font-size: 8.5px;">CYBER-ALU</span>
+        <span style="font-size: 7px; color: #1a633a; margin-top: 2px;">REV 4.2</span>
+        <div class="chip-pins-left">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+        <div class="chip-pins-right">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+      </div>
+
+      <!-- SMD Flash EEPROM / Controller (Left Flank) -->
+      <div class="chip chip-smd-1">
+        <span style="font-size: 7.5px; color: #1e824c;">ROM-BIOS</span>
+        <span style="font-size: 6.5px; color: #155532;">64KB</span>
+      </div>
+
+      <!-- SMD Cryptographic Coprocessor (Right Flank) -->
+      <div class="chip chip-smd-2">
+        <span style="font-size: 7.5px; color: #1e824c;">SEC_ENG</span>
+        <span style="font-size: 6.5px; color: #155532;">256-BIT</span>
+      </div>
+
+      <!-- Solid Can Capacitors -->
+      <div class="capacitor-can cap-1" title="Capacitor 470uF"></div>
+      <div class="capacitor-can cap-2" title="Capacitor 470uF"></div>
+      <div class="capacitor-can cap-3" title="Capacitor 220uF"></div>
+
+      <!-- Resistor Arrays -->
+      <div class="resistor-block res-1">
+        <div class="r-band"></div><div class="r-band"></div><div class="r-band"></div>
+      </div>
+      <div class="resistor-block res-2">
+        <div class="r-band"></div><div class="r-band"></div><div class="r-band"></div>
+      </div>
+
+      <!-- RAM Stick Modules (Dual Channel) -->
+      <div class="ram-module ram-stick-1" title="DDR-SRAM BANK 0">
+        <div class="ram-chips">
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+        </div>
+        <div class="ram-gold-edge"></div>
+      </div>
+
+      <div class="ram-module ram-stick-2" title="DDR-SRAM BANK 1">
+        <div class="ram-chips">
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+          <div class="ram-ic"></div>
+        </div>
+        <div class="ram-gold-edge"></div>
+      </div>
+
+      <!-- High Precision Quartz Crystal Oscillator -->
+      <div class="oscillator osc-1" title="MASTER CLOCK 14.318 MHz">14.318</div>
+
+      <!-- Chipset Southbridge I/O Controller (Bottom Right) -->
+      <div class="chip chip-southbridge" title="SOUTHBRIDGE I/O HUB">
+        <div class="chip-notch"></div>
+        <div class="sb-inner">
+          <span style="font-weight: bold; color: #2ea861; font-size: 7.5px;">IO-HUB</span>
+          <span style="font-size: 6px; color: #1a633a;">PCIE-X</span>
+        </div>
+        <div class="chip-pins-left">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+        <div class="chip-pins-right">
+          <div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div><div class="chip-pin"></div>
+        </div>
+      </div>
+
+      <!-- Motherboard Status Indicator LEDs -->
+      <div class="motherboard-led led-green" style="top: 24px; right: 170px;" title="VCC_OK"></div>
+      <div class="motherboard-led led-amber" style="top: 40px; right: 170px;" title="DATA_BUS_RX"></div>
+      <div class="motherboard-led led-cyan" style="top: 56px; right: 170px;" title="DMA_ACT"></div>
+
+      <div class="motherboard-led led-green-alt" style="bottom: 125px; left: 42px;" title="MEM_CLK"></div>
+      <div class="motherboard-led led-cyan" style="bottom: 40px; left: 160px;" title="ALU_RDY"></div>
+
+      <div class="motherboard-led led-green" style="top: 50%; left: 24px;" title="SYS_HEARTBEAT"></div>
+      <div class="motherboard-led led-amber" style="top: 50%; right: 28px;" title="BUS_INT"></div>
+    </div>
+  </div>
+
+  <!-- Prominent Website Masthead & Title -->
+  <header class="site-masthead" role="banner">
+    <h1 class="site-title">
+      <span class="title-bracket">[</span>
+      <span>MIND.EXE</span>
+      <span class="title-bracket">]</span>
+    </h1>
+    <div class="site-subtitle">NEURAL INTERFACE // COGNITIVE ASSESSMENT SYSTEM</div>
+  </header>
+
+  <main class="terminal-container" id="terminal-window" onclick="focusInput()">
+    <!-- Header -->
+    <header class="terminal-header">
+      <div class="terminal-title">
+        <span class="status-dot"></span>
+        <span>MIND.EXE // NEURAL INTERFACE</span>
+      </div>
+      <div class="terminal-controls">
+        <button type="button" class="anim-toggle-btn" id="anim-btn" onclick="toggleEffects(event)">CRT: ON</button>
+        <span>MEM: 640K OK</span>
+        <span>[TTY 01]</span>
+      </div>
+    </header>
+
+    <!-- Top Status Section -->
+    <section class="status-panel" aria-label="Game Status">
+      <div class="status-item">
+        <span class="status-label">Level</span>
+        <span class="status-value" id="stat-level">01</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Score</span>
+        <span class="status-value" id="stat-score">0000</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Streak</span>
+        <span class="status-value" id="stat-streak">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Progress</span>
+        <span class="status-value" id="stat-progress">0 / 5</span>
+      </div>
+    </section>
+
+    <!-- Scrollable Terminal Body -->
+    <div class="terminal-body" id="terminal-body" role="log" aria-live="polite"></div>
+
+    <!-- Terminal Command Line -->
+    <div class="terminal-input-bar">
+      <label for="cmd-input" class="prompt-label">USER&gt;</label>
+      <div class="input-wrapper">
+        <input 
+          type="text" 
+          id="cmd-input" 
+          autocomplete="off" 
+          autocorrect="off" 
+          autocapitalize="off" 
+          spellcheck="false" 
+          placeholder="Type 'start' or 'help'..."
+          aria-label="Terminal command prompt"
+        />
+      </div>
+    </div>
+  </main>
+
+  <script>
+    /* =========================================================================
+       MIND.EXE — Cognitive Assessment Module
+       Final Version: Robust State Persistence, History Navigation,
+       Interactive Level Management, Comprehensive Command Set & Procedural Math
+       ========================================================================= */
+
+    const STORAGE_KEY = "MIND_EXE_SAVE_V1";
+    const MAX_TERMINAL_LOGS = 150; // Trims buffer to prevent DOM bloat on long play sessions
+
+    // --- Level Metadata & Descriptions ---
+    const LEVEL_CONFIG = {
+      1: { name: "Initiate", desc: "Simple riddles, basic addition, subtraction & missing numbers" },
+      2: { name: "Apprentice", desc: "Multiplication, division, one-step algebra & lateral riddles" },
+      3: { name: "Thinker", desc: "Two-step equations, number patterns & trickier riddles" },
+      4: { name: "Analyst", desc: "Bracket operations, mixed arithmetic & abstract riddles" },
+      5: { name: "Expert", desc: "Challenging mental maths, sequences & clever riddles" }
+    };
+
+    function getLevelInfo(lvl) {
+      if (LEVEL_CONFIG[lvl]) return LEVEL_CONFIG[lvl];
+      return { name: `Cyber-Master [Tier ${lvl}]`, desc: "Advanced mental calculations & high-tier cognition queries" };
+    }
+
+    // --- State Management ---
+    const gameState = {
+      bootComplete: false,
+      gameStarted: false,
+      awaitingLevelSummaryDecision: false,
+      awaitingRestartConfirmation: false,
+      levelPassed: false,
+
+      // Overall metrics
+      score: 0,
+      streak: 0,
+      bestStreak: 0,
+      totalAnswered: 0,
+      totalCorrect: 0,
+      totalIncorrect: 0,
+
+      // Current level progress (5 questions per level)
+      level: 1,
+      levelQuestionCount: 0,
+      levelCorrect: 0,
+      levelIncorrect: 0,
+      levelScoreEarned: 0,
+
+      // Active question state
+      activeQuestion: null,
+      questionResolved: true,
+      hintUsed: false,
+
+      // Question deduplication
+      recentRiddleKeys: [],
+      recentMathSignatures: []
+    };
+
+    // --- Command History (Up/Down arrow navigation) ---
+    const commandHistory = [];
+    let historyIndex = -1;
+
+    // --- Curated Riddle Bank (5 Tiers) ---
+    const riddleBank = {
+      1: [
+        {
+          id: "r1_clock",
+          question: "I have hands but cannot clap. What am I?",
+          answers: ["clock", "a clock", "watch", "a watch", "wall clock", "wristwatch"],
+          hint: "Tick tock, it monitors the passage of hours.",
+          explanation: "A clock or watch possesses hour/minute hands but cannot clap."
+        },
+        {
+          id: "r1_towel",
+          question: "I get wetter the more I dry. What am I?",
+          answers: ["towel", "a towel", "bath towel", "tea towel", "paper towel"],
+          hint: "Commonly used in bathrooms after taking a shower.",
+          explanation: "A towel absorbs moisture as it dries surfaces."
+        },
+        {
+          id: "r1_neck",
+          question: "What has a neck but no head?",
+          answers: ["bottle", "a bottle", "guitar", "a guitar", "shirt", "a shirt"],
+          hint: "Often crafted from glass or plastic to store liquids.",
+          explanation: "A bottle has an upper neck leading to its opening, but no head."
+        },
+        {
+          id: "r1_teeth",
+          question: "What has many teeth, but cannot bite?",
+          answers: ["comb", "a comb", "hair comb", "saw", "a saw", "gear", "zipper"],
+          hint: "Kept on a dresser to groom and untangle your hair.",
+          explanation: "A hair comb has a row of fine teeth used for styling."
+        },
+        {
+          id: "r1_legs",
+          question: "What has four legs, but cannot walk?",
+          answers: ["table", "a table", "chair", "a chair", "bed", "a bed"],
+          hint: "Common piece of furniture in your dining room or office.",
+          explanation: "A table or chair stands firmly on four stationary legs."
+        }
+      ],
+      2: [
+        {
+          id: "r2_keyboard",
+          question: "I have keys but no locks and space but no room. What am I?",
+          answers: ["keyboard", "a keyboard", "computer keyboard", "piano", "a piano"],
+          hint: "You are utilizing its inputs to communicate with this terminal.",
+          explanation: "A computer keyboard contains typing keys, a space bar, and enter."
+        },
+        {
+          id: "r2_footsteps",
+          question: "The more you take, the more you leave behind. What am I?",
+          answers: ["footsteps", "footstep", "footprints", "footprint", "steps"],
+          hint: "Indelible marks left in mud, dust, or snow as you walk.",
+          explanation: "With every step you take, another footprint is left behind."
+        },
+        {
+          id: "r2_stamp",
+          question: "What can travel around the world while staying in a corner?",
+          answers: ["stamp", "a stamp", "postage stamp", "a postage stamp"],
+          hint: "Adhered to the top right corner of a mailing envelope.",
+          explanation: "A postage stamp stays in the envelope's corner while traveling internationally."
+        },
+        {
+          id: "r2_candle",
+          question: "I am tall when I am young, and I am short when I am old. What am I?",
+          answers: ["candle", "a candle", "pencil", "a pencil"],
+          hint: "It burns with an open flame and melts with time.",
+          explanation: "A candle burns down from tall to short as wax melts."
+        },
+        {
+          id: "r2_needle",
+          question: "What has an eye, but cannot see?",
+          answers: ["needle", "a needle", "sewing needle", "hurricane", "storm", "potato"],
+          hint: "A fine steel instrument through which thread is drawn.",
+          explanation: "A sewing needle has an eyelet through which thread passes."
+        }
+      ],
+      3: [
+        {
+          id: "r3_bank",
+          question: "I have branches, but no fruit, trunk or leaves. What am I?",
+          answers: ["bank", "a bank", "financial institution", "river bank"],
+          hint: "A company that manages savings accounts and loans.",
+          explanation: "A commercial bank operates financial branches."
+        },
+        {
+          id: "r3_sponge",
+          question: "What is full of holes but still holds water?",
+          answers: ["sponge", "a sponge", "sea sponge"],
+          hint: "Porous cleaning tool found next to kitchen sinks.",
+          explanation: "A sponge's open porous structure holds liquid through capillary action."
+        },
+        {
+          id: "r3_coin",
+          question: "What has a head and a tail, but no body?",
+          answers: ["coin", "a coin", "penny", "quarter", "nickel", "dime"],
+          hint: "Flipped in the air to determine a 50/50 probability.",
+          explanation: "A metal coin features heads on the obverse and tails on the reverse."
+        },
+        {
+          id: "r3_echo",
+          question: "I speak without a mouth and hear without ears. I have nobody, but I come alive with wind. What am I?",
+          answers: ["echo", "an echo", "sound echo"],
+          hint: "You hear it bounce back when shouting into a canyon.",
+          explanation: "An echo reflects vocal sound waves back across open spaces."
+        },
+        {
+          id: "r3_ton",
+          question: "Forward I am heavy, but backward I am not. What am I?",
+          answers: ["ton", "a ton"],
+          hint: "Read the word TON in reverse: 'NOT'.",
+          explanation: "A 'ton' is very heavy forward; backwards it literally spells 'not'."
+        }
+      ],
+      4: [
+        {
+          id: "r4_darkness",
+          question: "The more of this there is, the less you see. What is it?",
+          answers: ["darkness", "dark", "the dark", "fog", "a fog"],
+          hint: "It descends when all light sources are extinguished.",
+          explanation: "Darkness reduces optical visibility as its intensity rises."
+        },
+        {
+          id: "r4_secret",
+          question: "If you have me, you want to share me. If you share me, you haven't got me. What am I?",
+          answers: ["secret", "a secret", "confidentiality"],
+          hint: "Something confidential kept between close confidants.",
+          explanation: "A secret ceases to remain a secret once widely disclosed."
+        },
+        {
+          id: "r4_piano",
+          question: "What has 88 keys, but cannot open a single door?",
+          answers: ["piano", "a piano", "grand piano", "upright piano"],
+          hint: "A classical musical instrument with black and white keys.",
+          explanation: "A standard full-size piano has 88 musical keys."
+        },
+        {
+          id: "r4_fence",
+          question: "What runs all around a backyard without ever moving?",
+          answers: ["fence", "a fence", "hedges", "hedge", "wall", "a wall"],
+          hint: "A wooden or metallic perimeter barrier around a lawn.",
+          explanation: "A property fence borders the entire perimeter without physical locomotion."
+        },
+        {
+          id: "r4_silence",
+          question: "It is so fragile that if you say its name, you break it. What is it?",
+          answers: ["silence", "quiet", "quietness"],
+          hint: "The absolute absence of noise or sound.",
+          explanation: "Uttering the word 'silence' produces sound, thus breaking it."
+        }
+      ],
+      5: [
+        {
+          id: "r5_promise",
+          question: "What can be broken, but is never held in hands?",
+          answers: ["promise", "a promise", "trust", "heart", "a heart", "vow", "a vow", "rule", "rules"],
+          hint: "A personal verbal commitment made to another person.",
+          explanation: "A promise is a spoken or conceptual pact that can be broken."
+        },
+        {
+          id: "r5_future",
+          question: "I am always ahead of you, but can never be reached. What am I?",
+          answers: ["future", "the future", "tomorrow", "horizon", "the horizon"],
+          hint: "The period of time that has not yet occurred.",
+          explanation: "The future continuously remains ahead of the present moment."
+        },
+        {
+          id: "r5_mirror",
+          question: "I look at you, you look at me, I raise my right, you raise your left. What am I?",
+          answers: ["mirror", "a mirror", "reflection", "a reflection"],
+          hint: "Smooth reflective glass surface showing optical inversion.",
+          explanation: "A mirror produces a laterally reversed reflection of the observer."
+        },
+        {
+          id: "r5_coffin",
+          question: "The person who makes it doesn't need it; the person who buys it doesn't use it; the person who uses it doesn't know it. What is it?",
+          answers: ["coffin", "a coffin", "casket", "a casket"],
+          hint: "A funerary box used for burial.",
+          explanation: "A coffin is crafted by a carpenter, purchased by family, and occupied by the deceased."
+        },
+        {
+          id: "r5_hole",
+          question: "The more you take from it, the larger it becomes. What is it?",
+          answers: ["hole", "a hole", "pit", "a pit"],
+          hint: "Digging earth with a shovel expands it.",
+          explanation: "Removing material from a hole increases its volume."
+        }
+      ]
+    };
+
+    // --- Procedural Maths Generator ---
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateMathQuestion(level) {
+      const tier = Math.min(5, Math.max(1, level));
+      let qObj = null;
+
+      if (tier === 1) {
+        const flavor = randInt(1, 4);
+        if (flavor === 1) {
+          const a = randInt(2, 9);
+          const b = randInt(3, 12);
+          const c = a + b;
+          qObj = {
+            question: `${a} + x = ${c}. What is x?`,
+            answers: [String(b)],
+            hint: `Subtract ${a} from ${c}.`,
+            explanation: `x = ${c} - ${a} = ${b}`
+          };
+        } else if (flavor === 2) {
+          const b = randInt(2, 9);
+          const c = randInt(4, 15);
+          const a = b + c;
+          qObj = {
+            question: `${a} - x = ${c}. What is x?`,
+            answers: [String(b)],
+            hint: `${a} minus what equals ${c}?`,
+            explanation: `x = ${a} - ${c} = ${b}`
+          };
+        } else if (flavor === 3) {
+          const a = randInt(11, 35);
+          const b = randInt(6, 25);
+          const sum = a + b;
+          qObj = {
+            question: `What is ${a} + ${b}?`,
+            answers: [String(sum)],
+            hint: `Sum the units (${a % 10} + ${b % 10}), then the tens.`,
+            explanation: `${a} + ${b} = ${sum}`
+          };
+        } else {
+          const b = randInt(4, 14);
+          const c = randInt(8, 22);
+          const total = b + c;
+          qObj = {
+            question: `What is ${total} - ${b}?`,
+            answers: [String(c)],
+            hint: `Count backwards or compute ${total} - ${b}.`,
+            explanation: `${total} - ${b} = ${c}`
+          };
+        }
+      } else if (tier === 2) {
+        const flavor = randInt(1, 4);
+        if (flavor === 1) {
+          const a = randInt(3, 8);
+          const x = randInt(3, 9);
+          const prod = a * x;
+          qObj = {
+            question: `${a}x = ${prod}. What is x?`,
+            answers: [String(x)],
+            hint: `Divide ${prod} by ${a}.`,
+            explanation: `x = ${prod} / ${a} = ${x}`
+          };
+        } else if (flavor === 2) {
+          const a = randInt(2, 6);
+          const b = randInt(4, 12);
+          const prod = a * b;
+          qObj = {
+            question: `x / ${a} = ${b}. What is x?`,
+            answers: [String(prod)],
+            hint: `Multiply ${b} by ${a}.`,
+            explanation: `x = ${b} × ${a} = ${prod}`
+          };
+        } else if (flavor === 3) {
+          const a = randInt(6, 12);
+          const b = randInt(4, 9);
+          const prod = a * b;
+          qObj = {
+            question: `What is ${a} × ${b}?`,
+            answers: [String(prod)],
+            hint: `Decompose: (${a} × 5) + (${a} × ${b - 5}).`,
+            explanation: `${a} × ${b} = ${prod}`
+          };
+        } else {
+          const items = randInt(3, 6);
+          const cost = randInt(4, 8);
+          const total = items * cost;
+          qObj = {
+            question: `Data modules cost ${cost} creds each. How many can you buy with ${total} creds?`,
+            answers: [String(items)],
+            hint: `Divide total funds (${total}) by unit price (${cost}).`,
+            explanation: `${total} / ${cost} = ${items}`
+          };
+        }
+      } else if (tier === 3) {
+        const flavor = randInt(1, 3);
+        if (flavor === 1) {
+          const a = randInt(2, 5);
+          const x = randInt(2, 8);
+          const b = randInt(3, 12);
+          const c = a * x + b;
+          qObj = {
+            question: `${a}x + ${b} = ${c}. What is x?`,
+            answers: [String(x)],
+            hint: `Subtract ${b} from ${c} to get ${c - b}, then divide by ${a}.`,
+            explanation: `${a}x = ${c - b} -> x = ${(c - b) / a} = ${x}`
+          };
+        } else if (flavor === 2) {
+          const a = randInt(2, 4);
+          const x = randInt(3, 9);
+          const b = randInt(2, 9);
+          const c = a * x - b;
+          qObj = {
+            question: `${a}x - ${b} = ${c}. What is x?`,
+            answers: [String(x)],
+            hint: `Add ${b} to ${c} to get ${c + b}, then divide by ${a}.`,
+            explanation: `${a}x = ${c + b} -> x = ${(c + b) / a} = ${x}`
+          };
+        } else {
+          const start = randInt(2, 8);
+          const diff = randInt(3, 6);
+          const s1 = start;
+          const s2 = s1 + diff;
+          const s3 = s2 + diff;
+          const s4 = s3 + diff;
+          const s5 = s4 + diff;
+          qObj = {
+            question: `Identify the next sequence value: ${s1}, ${s2}, ${s3}, ${s4}, ?`,
+            answers: [String(s5)],
+            hint: `Notice the constant delta of +${diff} between each term.`,
+            explanation: `Each number increases by ${diff}. ${s4} + ${diff} = ${s5}`
+          };
+        }
+      } else if (tier === 4) {
+        const flavor = randInt(1, 3);
+        if (flavor === 1) {
+          const a = randInt(2, 4);
+          const b = randInt(2, 5);
+          const x = randInt(2, 6);
+          const c = a * (x + b);
+          qObj = {
+            question: `${a}(x + ${b}) = ${c}. What is x?`,
+            answers: [String(x)],
+            hint: `First divide ${c} by ${a} to get ${c / a}, then subtract ${b}.`,
+            explanation: `x + ${b} = ${c / a} -> x = ${c / a - b} = ${x}`
+          };
+        } else if (flavor === 2) {
+          const a = randInt(3, 6);
+          const b = randInt(4, 9);
+          const c = randInt(2, 5);
+          const result = (a + b) * c;
+          qObj = {
+            question: `Evaluate: (${a} + ${b}) × ${c}`,
+            answers: [String(result)],
+            hint: `Calculate inner brackets (${a} + ${b} = ${a + b}) first, then multiply.`,
+            explanation: `(${a + b}) × ${c} = ${result}`
+          };
+        } else {
+          const start = randInt(2, 5);
+          const s1 = start;
+          const s2 = s1 * 2;
+          const s3 = s2 * 2;
+          const s4 = s3 * 2;
+          const s5 = s4 * 2;
+          qObj = {
+            question: `Complete the sequence: ${s1}, ${s2}, ${s3}, ${s4}, ?`,
+            answers: [String(s5)],
+            hint: `Observe the multiplier of ×2 across each successive term.`,
+            explanation: `Each term doubles the previous. ${s4} × 2 = ${s5}`
+          };
+        }
+      } else {
+        const flavor = randInt(1, 3);
+        if (flavor === 1) {
+          const a = randInt(6, 9);
+          const b = randInt(6, 9);
+          const c = randInt(2, 5);
+          const d = randInt(3, 5);
+          const ans = (a * b) - (c * d);
+          qObj = {
+            question: `Calculate: (${a} × ${b}) - (${c} × ${d})`,
+            answers: [String(ans)],
+            hint: `${a} × ${b} = ${a*b}. Subtract (${c} × ${d} = ${c*d}).`,
+            explanation: `${a*b} - ${c*d} = ${ans}`
+          };
+        } else if (flavor === 2) {
+          const n = randInt(2, 6);
+          const s1 = n * n;
+          const s2 = (n + 1) * (n + 1);
+          const s3 = (n + 2) * (n + 2);
+          const s4 = (n + 3) * (n + 3);
+          const s5 = (n + 4) * (n + 4);
+          qObj = {
+            question: `Determine the missing square: ${s1}, ${s2}, ${s3}, ${s4}, ?`,
+            answers: [String(s5)],
+            hint: `Notice consecutive squares: ${n}², ${n+1}², ${n+2}²...`,
+            explanation: `Next term is (${n+4})² = ${s5}`
+          };
+        } else {
+          const a = randInt(4, 7);
+          const x = randInt(6, 12);
+          const b = randInt(7, 15);
+          const c = a * x + b;
+          qObj = {
+            question: `${a}x + ${b} = ${c}. What is x?`,
+            answers: [String(x)],
+            hint: `${c} - ${b} = ${c - b}. Now divide ${c - b} by ${a}.`,
+            explanation: `${a}x = ${c - b} -> x = ${(c - b) / a} = ${x}`
+          };
+        }
+      }
+
+      qObj.type = "MATHS";
+      return qObj;
+    }
+
+    // --- Dynamic Question Picker ---
+    function pickNextQuestionForLevel(level) {
+      const tier = Math.min(5, Math.max(1, level));
+      const preferRiddle = (gameState.levelQuestionCount % 2 === 0);
+
+      const pool = riddleBank[tier] || riddleBank[5];
+      const freshRiddles = pool.filter(r => !gameState.recentRiddleKeys.includes(r.id));
+
+      if (preferRiddle && freshRiddles.length > 0) {
+        const choice = freshRiddles[Math.floor(Math.random() * freshRiddles.length)];
+        gameState.recentRiddleKeys.push(choice.id);
+        if (gameState.recentRiddleKeys.length > 15) {
+          gameState.recentRiddleKeys.shift();
+        }
+        return {
+          type: "RIDDLE",
+          question: choice.question,
+          answers: choice.answers,
+          hint: choice.hint,
+          explanation: choice.explanation
+        };
+      } else {
+        let mathQ = generateMathQuestion(level);
+        let retries = 0;
+        while (gameState.recentMathSignatures.includes(mathQ.question) && retries < 5) {
+          mathQ = generateMathQuestion(level);
+          retries++;
+        }
+        gameState.recentMathSignatures.push(mathQ.question);
+        if (gameState.recentMathSignatures.length > 20) {
+          gameState.recentMathSignatures.shift();
+        }
+        return mathQ;
+      }
+    }
+
+    // --- DOM Elements ---
+    const termBody = document.getElementById("terminal-body");
+    const cmdInput = document.getElementById("cmd-input");
+    const statLevel = document.getElementById("stat-level");
+    const statScore = document.getElementById("stat-score");
+    const statStreak = document.getElementById("stat-streak");
+    const statProgress = document.getElementById("stat-progress");
+    const animBtn = document.getElementById("anim-btn");
+
+    // --- Terminal Output Helpers ---
+    function printLine(text, styleClass = "") {
+      const line = document.createElement("div");
+      line.className = "log-line" + (styleClass ? " " + styleClass : "");
+      line.textContent = text;
+      termBody.appendChild(line);
+      trimTerminalHistory();
+      scrollToBottom();
+      return line;
+    }
+
+    function printBox(text, styleClass = "") {
+      const box = document.createElement("div");
+      box.className = "log-box" + (styleClass ? " " + styleClass : "");
+      box.textContent = text;
+      termBody.appendChild(box);
+      trimTerminalHistory();
+      scrollToBottom();
+      return box;
+    }
+
+    function trimTerminalHistory() {
+      while (termBody.children.length > MAX_TERMINAL_LOGS) {
+        termBody.removeChild(termBody.firstChild);
+      }
+    }
+
+    function scrollToBottom() {
+      termBody.scrollTop = termBody.scrollHeight;
+    }
+
+    function focusInput() {
+      if (cmdInput) {
+        cmdInput.focus();
+      }
+    }
+
+    function updateStatusDisplay() {
+      statScore.textContent = String(gameState.score).padStart(4, "0");
+      statStreak.textContent = String(gameState.streak);
+      statLevel.textContent = String(gameState.level).padStart(2, "0");
+      statProgress.textContent = `${gameState.levelQuestionCount} / 5`;
+    }
+
+    // --- Visual FX Toggle ---
+    function toggleEffects(e) {
+      if (e) e.stopPropagation();
+      document.body.classList.toggle("no-effects");
+      const isOff = document.body.classList.contains("no-effects");
+      animBtn.textContent = isOff ? "CRT: OFF" : "CRT: ON";
+      focusInput();
+    }
+
+    // --- LocalStorage Persistence ---
+    function saveSession() {
+      try {
+        const payload = {
+          gameStarted: gameState.gameStarted,
+          awaitingLevelSummaryDecision: gameState.awaitingLevelSummaryDecision,
+          levelPassed: gameState.levelPassed,
+          score: gameState.score,
+          streak: gameState.streak,
+          bestStreak: gameState.bestStreak,
+          totalAnswered: gameState.totalAnswered,
+          totalCorrect: gameState.totalCorrect,
+          totalIncorrect: gameState.totalIncorrect,
+          level: gameState.level,
+          levelQuestionCount: gameState.levelQuestionCount,
+          levelCorrect: gameState.levelCorrect,
+          levelIncorrect: gameState.levelIncorrect,
+          levelScoreEarned: gameState.levelScoreEarned,
+          activeQuestion: gameState.activeQuestion,
+          questionResolved: gameState.questionResolved,
+          hintUsed: gameState.hintUsed,
+          recentRiddleKeys: gameState.recentRiddleKeys,
+          recentMathSignatures: gameState.recentMathSignatures
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        // Handle storage quota or private-browsing restrictions silently
+      }
+    }
+
+    function loadSavedSession() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data || typeof data.score !== "number" || typeof data.level !== "number") {
+          return false;
+        }
+
+        gameState.gameStarted = Boolean(data.gameStarted);
+        gameState.awaitingLevelSummaryDecision = Boolean(data.awaitingLevelSummaryDecision);
+        gameState.levelPassed = Boolean(data.levelPassed);
+        gameState.score = data.score || 0;
+        gameState.streak = data.streak || 0;
+        gameState.bestStreak = data.bestStreak || 0;
+        gameState.totalAnswered = data.totalAnswered || 0;
+        gameState.totalCorrect = data.totalCorrect || 0;
+        gameState.totalIncorrect = data.totalIncorrect || 0;
+        gameState.level = data.level || 1;
+        gameState.levelQuestionCount = data.levelQuestionCount || 0;
+        gameState.levelCorrect = data.levelCorrect || 0;
+        gameState.levelIncorrect = data.levelIncorrect || 0;
+        gameState.levelScoreEarned = data.levelScoreEarned || 0;
+        gameState.activeQuestion = data.activeQuestion || null;
+        gameState.questionResolved = Boolean(data.questionResolved);
+        gameState.hintUsed = Boolean(data.hintUsed);
+        gameState.recentRiddleKeys = Array.isArray(data.recentRiddleKeys) ? data.recentRiddleKeys : [];
+        gameState.recentMathSignatures = Array.isArray(data.recentMathSignatures) ? data.recentMathSignatures : [];
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function clearSavedSession() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+    }
+
+    // --- Boot Sequence Simulation ---
+    async function runBootSequence() {
+      const bootSteps = [
+        { text: "MIND.EXE [Version 1.0]", delay: 180, cls: "log-green" },
+        { text: "Initializing cognitive assessment module...", delay: 280, cls: "log-dim" },
+        { text: "Loading riddle database... OK", delay: 240, cls: "log-green" },
+        { text: "Loading mathematical engine... OK", delay: 240, cls: "log-green" },
+        { text: "System ready.", delay: 200, cls: "log-amber" },
+        { text: "", delay: 50 },
+        { text: "Type 'help' to see commands.", delay: 120, cls: "log-cyan" },
+        { text: "Type 'start' to begin.", delay: 120, cls: "log-cyan" }
+      ];
+
+      for (const step of bootSteps) {
+        await new Promise(r => setTimeout(r, step.delay));
+        if (step.text === "") {
+          const empty = document.createElement("div");
+          empty.style.height = "6px";
+          termBody.appendChild(empty);
+        } else {
+          printLine(step.text, step.cls);
+        }
+      }
+
+      gameState.bootComplete = true;
+
+      // Check if there was a saved game to resume
+      const hasSaved = loadSavedSession();
+      if (hasSaved && gameState.gameStarted) {
+        printLine("\n[RESTORE] Previous cognitive session detected in NVRAM.", "log-amber");
+        printLine(`Resumed at Level ${gameState.level} (${getLevelInfo(gameState.level).name}), Score: ${gameState.score} PTS.`, "log-dim");
+        updateStatusDisplay();
+
+        if (gameState.awaitingLevelSummaryDecision) {
+          showLevelSummary();
+        } else if (!gameState.questionResolved && gameState.activeQuestion) {
+          const qNum = gameState.levelQuestionCount + 1;
+          const modType = gameState.activeQuestion.type === "RIDDLE" ? "[MODULE: RIDDLE]" : "[MODULE: MENTAL MATHS]";
+          printLine(`\n[RESUMED // QUERY ${qNum}/5] ${modType}`, "log-cyan");
+          printBox(gameState.activeQuestion.question, "log-green");
+        } else {
+          serveNextQuestion();
+        }
+      } else {
+        updateStatusDisplay();
+      }
+
+      focusInput();
+    }
+
+    // --- Core Game Flow ---
+    function startGame() {
+      gameState.gameStarted = true;
+      gameState.awaitingLevelSummaryDecision = false;
+      gameState.awaitingRestartConfirmation = false;
+      gameState.score = 0;
+      gameState.streak = 0;
+      gameState.bestStreak = 0;
+      gameState.totalAnswered = 0;
+      gameState.totalCorrect = 0;
+      gameState.totalIncorrect = 0;
+
+      gameState.level = 1;
+      gameState.levelQuestionCount = 0;
+      gameState.levelCorrect = 0;
+      gameState.levelIncorrect = 0;
+      gameState.levelScoreEarned = 0;
+      gameState.recentRiddleKeys = [];
+      gameState.recentMathSignatures = [];
+
+      printLine(">>> INITIALIZING LEVEL 1: INITIATE...", "log-amber");
+      printLine(getLevelInfo(1).desc, "log-dim");
+      saveSession();
+      updateStatusDisplay();
+      serveNextQuestion();
+    }
+
+    function retryCurrentLevel() {
+      gameState.awaitingLevelSummaryDecision = false;
+      gameState.levelQuestionCount = 0;
+      gameState.levelCorrect = 0;
+      gameState.levelIncorrect = 0;
+      gameState.levelScoreEarned = 0;
+      gameState.questionResolved = true;
+
+      const lvlInfo = getLevelInfo(gameState.level);
+      printLine(`>>> RESTARTING LEVEL ${gameState.level}: ${lvlInfo.name.toUpperCase()}...`, "log-amber");
+      printLine("Accumulated total score preserved. Retrying level challenges...", "log-dim");
+      saveSession();
+      updateStatusDisplay();
+      serveNextQuestion();
+    }
+
+    function advanceToNextLevel() {
+      gameState.awaitingLevelSummaryDecision = false;
+      gameState.level += 1;
+      gameState.levelQuestionCount = 0;
+      gameState.levelCorrect = 0;
+      gameState.levelIncorrect = 0;
+      gameState.levelScoreEarned = 0;
+      gameState.questionResolved = true;
+
+      const lvlInfo = getLevelInfo(gameState.level);
+      printLine(`\n>>> ADVANCING TO LEVEL ${gameState.level}: ${lvlInfo.name.toUpperCase()}`, "log-amber");
+      printLine(lvlInfo.desc, "log-dim");
+      saveSession();
+      updateStatusDisplay();
+      serveNextQuestion();
+    }
+
+    function serveNextQuestion() {
+      if (gameState.levelQuestionCount >= 5) {
+        showLevelSummary();
+        return;
+      }
+
+      gameState.hintUsed = false;
+      gameState.questionResolved = false;
+      gameState.activeQuestion = pickNextQuestionForLevel(gameState.level);
+
+      const qNum = gameState.levelQuestionCount + 1;
+      const modType = gameState.activeQuestion.type === "RIDDLE" ? "[MODULE: RIDDLE]" : "[MODULE: MENTAL MATHS]";
+
+      printLine(`\n[LEVEL ${gameState.level} // QUERY ${qNum}/5] ${modType}`, "log-cyan");
+      printBox(gameState.activeQuestion.question, "log-green");
+      saveSession();
+    }
+
+    // Clean comparison helper
+    function cleanAnswer(str) {
+      return String(str)
+        .toLowerCase()
+        .trim()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+        .replace(/\s+/g, " ");
+    }
+
+    // --- Answer Checking & Scoring ---
+    function checkAnswer(rawInput) {
+      if (!gameState.gameStarted) {
+        printLine("No active evaluation session. Type 'start' to begin.", "log-amber");
+        return;
+      }
+
+      if (gameState.awaitingLevelSummaryDecision) {
+        handleLevelDecisionInput(rawInput);
+        return;
+      }
+
+      if (gameState.questionResolved || !gameState.activeQuestion) {
+        printLine("Query already resolved. Type 'start' or wait for the next prompt.", "log-amber");
+        return;
+      }
+
+      const userClean = cleanAnswer(rawInput);
+      if (!userClean) {
+        printLine("Warning: Empty response submitted.", "log-amber");
+        return;
+      }
+
+      const q = gameState.activeQuestion;
+      const isMatch = q.answers.some(ans => cleanAnswer(ans) === userClean);
+
+      gameState.questionResolved = true;
+      gameState.levelQuestionCount += 1;
+      gameState.totalAnswered += 1;
+
+      if (isMatch) {
+        const basePts = 10;
+        const noHintBonus = gameState.hintUsed ? 0 : 5;
+        const pointsAwarded = basePts + noHintBonus;
+
+        gameState.score += pointsAwarded;
+        gameState.levelScoreEarned += pointsAwarded;
+        gameState.levelCorrect += 1;
+        gameState.totalCorrect += 1;
+        gameState.streak += 1;
+        if (gameState.streak > gameState.bestStreak) {
+          gameState.bestStreak = gameState.streak;
+        }
+
+        printLine(`[SUCCESS] Correct answer. +${pointsAwarded} PTS ${noHintBonus > 0 ? "(+5 No-Hint Bonus Included)" : ""}`, "log-green");
+        if (gameState.streak >= 3) {
+          printLine(`[STREAK BONUS UNLOCKED] Consecutive streak: ${gameState.streak}!`, "log-amber");
+        }
+      } else {
+        gameState.streak = 0;
+        gameState.levelIncorrect += 1;
+        gameState.totalIncorrect += 1;
+
+        const mainAns = q.answers[0];
+        printLine(`[ERROR] Incorrect. The answer was: ${mainAns}.`, "log-red");
+        if (q.explanation) {
+          printLine(`EXPLANATION: ${q.explanation}`, "log-dim");
+        }
+      }
+
+      saveSession();
+      updateStatusDisplay();
+
+      if (gameState.levelQuestionCount < 5) {
+        serveNextQuestion();
+      } else {
+        showLevelSummary();
+      }
+    }
+
+    function provideHint() {
+      if (!gameState.gameStarted || !gameState.activeQuestion || gameState.questionResolved) {
+        printLine("No active question requiring a hint.", "log-amber");
+        return;
+      }
+      if (gameState.hintUsed) {
+        printLine(`[CLUE REPEATED]: ${gameState.activeQuestion.hint}`, "log-amber");
+        return;
+      }
+      gameState.hintUsed = true;
+      printLine(`[CLUE]: ${gameState.activeQuestion.hint} (Note: No-hint bonus forfeited)`, "log-amber");
+      saveSession();
+    }
+
+    function skipQuestion() {
+      if (!gameState.gameStarted || !gameState.activeQuestion || gameState.questionResolved) {
+        printLine("No active question to skip.", "log-amber");
+        return;
+      }
+
+      gameState.questionResolved = true;
+      gameState.levelQuestionCount += 1;
+      gameState.totalAnswered += 1;
+      gameState.levelIncorrect += 1;
+      gameState.totalIncorrect += 1;
+      gameState.streak = 0;
+
+      const mainAns = gameState.activeQuestion.answers[0];
+      printLine(`[SKIPPED] Query bypassed. Expected answer was: "${mainAns}". Streak reset.`, "log-dim");
+      if (gameState.activeQuestion.explanation) {
+        printLine(`EXPLANATION: ${gameState.activeQuestion.explanation}`, "log-dim");
+      }
+
+      saveSession();
+      updateStatusDisplay();
+
+      if (gameState.levelQuestionCount < 5) {
+        serveNextQuestion();
+      } else {
+        showLevelSummary();
+      }
+    }
+
+    function repeatQuestion() {
+      if (!gameState.gameStarted || !gameState.activeQuestion || gameState.questionResolved) {
+        printLine("No active question to repeat.", "log-amber");
+        return;
+      }
+      printLine(`[REPEAT QUERY]: ${gameState.activeQuestion.question}`, "log-cyan");
+    }
+
+    // --- Level Summaries (4 out of 5 required to pass) ---
+    function showLevelSummary() {
+      gameState.awaitingLevelSummaryDecision = true;
+      const passed = gameState.levelCorrect >= 4;
+      gameState.levelPassed = passed;
+
+      const accuracy = ((gameState.levelCorrect / 5) * 100).toFixed(0);
+      const overallAcc = gameState.totalAnswered > 0 
+        ? ((gameState.totalCorrect / gameState.totalAnswered) * 100).toFixed(0) 
+        : "0";
+
+      const lvlInfo = getLevelInfo(gameState.level);
+
+      const summaryBoxText = 
+`================ LEVEL ${gameState.level} EVALUATION SUMMARY ================
+Rank / Tier      : ${lvlInfo.name}
+Questions Tested : 5
+Correct Answers  : ${gameState.levelCorrect}
+Incorrect/Skip   : ${gameState.levelIncorrect}
+Level Accuracy   : ${accuracy}%
+Score Earned     : +${gameState.levelScoreEarned} PTS
+Total Score      : ${gameState.score} PTS
+Current Streak   : ${gameState.streak} (Best Streak: ${gameState.bestStreak})
+Overall Accuracy : ${overallAcc}% (${gameState.totalCorrect}/${gameState.totalAnswered})
+============================================================`;
+
+      printBox(summaryBoxText, passed ? "log-green" : "log-amber");
+
+      if (passed) {
+        printLine("[LEVEL COMPLETE] Proceeding to the next challenge.", "log-green");
+        printLine("Type 'continue' (or 'next') to advance to Level " + (gameState.level + 1) + ".", "log-cyan");
+      } else {
+        printLine(`[LEVEL FAILED] Retry available. You scored ${gameState.levelCorrect}/5 (4/5 required to pass).`, "log-red");
+        printLine("Type 'retry' to attempt Level " + gameState.level + " again, or 'start' to reset entirely.", "log-amber");
+      }
+      saveSession();
+    }
+
+    function handleLevelDecisionInput(rawInput) {
+      const cmd = rawInput.trim().toLowerCase();
+      if (gameState.levelPassed) {
+        if (cmd === "continue" || cmd === "next" || cmd === "c" || cmd === "start") {
+          advanceToNextLevel();
+        } else {
+          printLine("Level complete! Type 'continue' to advance to the next level.", "log-cyan");
+        }
+      } else {
+        if (cmd === "retry" || cmd === "r") {
+          retryCurrentLevel();
+        } else if (cmd === "start") {
+          startGame();
+        } else {
+          printLine("Level benchmark not reached. Type 'retry' to re-attempt this level.", "log-amber");
+        }
+      }
+    }
+
+    // --- Detailed Inspection Commands ---
+    function showScore() {
+      const accuracy = gameState.totalAnswered > 0 
+        ? ((gameState.totalCorrect / gameState.totalAnswered) * 100).toFixed(1) 
+        : "0.0";
+      printBox(
+        `SCORE REPORT:
+Current Score    : ${gameState.score} PTS
+Current Streak   : ${gameState.streak}
+Overall Accuracy : ${accuracy}%`,
+        "log-cyan"
+      );
+    }
+
+    function showLevel() {
+      const lvlInfo = getLevelInfo(gameState.level);
+      printBox(
+        `CURRENT LEVEL STATUS:
+Level            : ${gameState.level} [${lvlInfo.name}]
+Description      : ${lvlInfo.desc}
+Level Progress   : ${gameState.levelQuestionCount} / 5 questions
+Pass Benchmark   : At least 4 correct (Current: ${gameState.levelCorrect})`,
+        "log-cyan"
+      );
+    }
+
+    function showStats() {
+      const accuracy = gameState.totalAnswered > 0 
+        ? ((gameState.totalCorrect / gameState.totalAnswered) * 100).toFixed(1) 
+        : "0.0";
+      const lvlInfo = getLevelInfo(gameState.level);
+
+      const statsContent = 
+`--- COMPLETE COGNITIVE PROFILE ---
+Tier / Level       : Level ${gameState.level} (${lvlInfo.name})
+Total Score        : ${gameState.score} PTS
+Active Streak      : ${gameState.streak}
+Peak Streak        : ${gameState.bestStreak}
+Total Questions    : ${gameState.totalAnswered}
+Correct Answers    : ${gameState.totalCorrect}
+Incorrect / Skipped: ${gameState.totalIncorrect}
+Accuracy Ratio     : ${accuracy}%
+Current Level Prog : ${gameState.levelQuestionCount} / 5
+Level Correct      : ${gameState.levelCorrect} / 5`;
+      printBox(statsContent, "log-green");
+    }
+
+    function showHelp() {
+      const helpText = 
+`--- MIND.EXE COMMAND DIRECTORY ---
+start             : Begin game from Level 1 or resume session
+answer <response> : Submit answer to current question
+<response>        : Direct answer submission (e.g. '17' or 'clock')
+hint              : Display neural clue (forfeits +5 no-hint bonus)
+skip              : Skip current question (0 pts, resets streak)
+repeat            : Re-display the active question
+score             : Display current score and streak
+level             : Display current level details and progress
+stats             : Full cognitive performance breakdown
+clear / cls       : Clear terminal screen without losing progress
+restart           : Prompt to erase NVRAM save and restart from 0
+quit              : Terminate session and display final report
+help              : Show this help reference`;
+      printBox(helpText, "log-green");
+    }
+
+    function requestRestart() {
+      gameState.awaitingRestartConfirmation = true;
+      printBox(
+        "WARNING: You are about to wipe your current progress and NVRAM save.\nAre you sure you want to restart? (Type 'yes' to confirm or 'no' to cancel)",
+        "log-amber"
+      );
+    }
+
+    function handleRestartConfirmation(rawInput) {
+      const clean = rawInput.trim().toLowerCase();
+      gameState.awaitingRestartConfirmation = false;
+      if (clean === "yes" || clean === "y") {
+        clearSavedSession();
+        printLine("[SYSTEM] NVRAM cleared. Re-initializing MIND.EXE...", "log-amber");
+        startGame();
+      } else {
+        printLine("[ABORT] Restart cancelled. Resuming active session.", "log-green");
+        if (!gameState.questionResolved && gameState.activeQuestion) {
+          repeatQuestion();
+        }
+      }
+    }
+
+    function quitSession() {
+      if (!gameState.gameStarted) {
+        printLine("Session terminated. Type 'start' to initialize a new run.", "log-dim");
+        return;
+      }
+      const accuracy = gameState.totalAnswered > 0 
+        ? ((gameState.totalCorrect / gameState.totalAnswered) * 100).toFixed(1) 
+        : "0.0";
+      const lvlInfo = getLevelInfo(gameState.level);
+
+      printBox(
+        `================ SESSION TERMINATION REPORT ================
+Final Rank Earned : Level ${gameState.level} [${lvlInfo.name}]
+Final Score       : ${gameState.score} PTS
+Peak Streak       : ${gameState.bestStreak}
+Total Queries     : ${gameState.totalAnswered}
+Total Correct     : ${gameState.totalCorrect}
+Accuracy Rating   : ${accuracy}%
+Session closed. Thank you for engaging with MIND.EXE.
+Type 'start' to begin a new cognitive evaluation.
+============================================================`,
+        "log-amber"
+      );
+
+      gameState.gameStarted = false;
+      gameState.activeQuestion = null;
+      gameState.questionResolved = true;
+      gameState.awaitingLevelSummaryDecision = false;
+      clearSavedSession();
+      updateStatusDisplay();
+    }
+
+    function clearTerminal() {
+      termBody.innerHTML = "";
+      printLine("Terminal display cleared. Cognitive state intact.", "log-dim");
+      if (gameState.gameStarted && !gameState.questionResolved && gameState.activeQuestion) {
+        printLine(`[ACTIVE QUERY]: ${gameState.activeQuestion.question}`, "log-cyan");
+      }
+    }
+
+    // --- Easter Eggs ---
+    function handleEasterEgg(cmd) {
+      if (cmd === "whoami") {
+        printLine("IDENTITY: Human subject #4092 // Neural coherence: STABLE", "log-green");
+        return true;
+      }
+      if (cmd === "matrix") {
+        printLine("Wake up, Neo... The Matrix has you. Follow the white rabbit.", "log-green");
+        return true;
+      }
+      if (cmd === "version" || cmd === "ver") {
+        printLine("MIND.EXE v1.0.4 [Build 2026.10-FINAL] // Arch: Monolithic Web TTY", "log-cyan");
+        return true;
+      }
+      return false;
+    }
+
+    // --- Master Command Parser ---
+    function processCommand(rawInput) {
+      const trimmed = rawInput.trim();
+      if (!trimmed) return;
+
+      // Add to command history
+      commandHistory.push(trimmed);
+      historyIndex = commandHistory.length;
+
+      // Echo user entry to terminal log
+      printLine(`USER> ${trimmed}`, "log-user");
+
+      // Handle restart confirmation modal state
+      if (gameState.awaitingRestartConfirmation) {
+        handleRestartConfirmation(trimmed);
+        return;
+      }
+
+      // Check if user is on level summary transition
+      if (gameState.awaitingLevelSummaryDecision) {
+        const lower = trimmed.toLowerCase();
+        if (lower === "help") {
+          showHelp();
+        } else if (lower === "score") {
+          showScore();
+        } else if (lower === "stats") {
+          showStats();
+        } else if (lower === "clear" || lower === "cls") {
+          clearTerminal();
+        } else if (lower === "restart") {
+          requestRestart();
+        } else if (lower === "quit") {
+          quitSession();
+        } else {
+          handleLevelDecisionInput(trimmed);
+        }
+        return;
+      }
+
+      const parts = trimmed.split(/\s+/);
+      const command = parts[0].toLowerCase();
+      const args = parts.slice(1).join(" ");
+
+      if (handleEasterEgg(command)) {
+        return;
+      }
+
+      switch (command) {
+        case "help":
+          showHelp();
+          break;
+        case "start":
+          if (gameState.gameStarted && !gameState.questionResolved) {
+            printLine("Game session already active. Use 'restart' to start from 0.", "log-amber");
+          } else {
+            startGame();
+          }
+          break;
+        case "hint":
+          provideHint();
+          break;
+        case "skip":
+          skipQuestion();
+          break;
+        case "repeat":
+          repeatQuestion();
+          break;
+        case "score":
+          showScore();
+          break;
+        case "level":
+          showLevel();
+          break;
+        case "stats":
+          showStats();
+          break;
+        case "restart":
+          requestRestart();
+          break;
+        case "quit":
+        case "exit":
+          quitSession();
+          break;
+        case "clear":
+        case "cls":
+          clearTerminal();
+          break;
+        case "answer":
+          if (!args) {
+            printBox(
+              "USAGE: answer <response>\nExample: 'answer 17' or 'answer a clock'\nYou can also type answers directly without the 'answer' prefix.",
+              "log-amber"
+            );
+          } else {
+            checkAnswer(args);
+          }
+          break;
+        default:
+          // Direct answer input fallback
+          if (gameState.gameStarted && !gameState.questionResolved) {
+            checkAnswer(trimmed);
+          } else {
+            printLine(
+              `'${command}' is not recognized as a command. Type 'help' for available instructions.`,
+              "log-dim"
+            );
+          }
+          break;
+      }
+    }
+
+    // --- Keyboard Event Handling (Enter & Arrow Keys) ---
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const value = cmdInput.value;
+        cmdInput.value = "";
+        processCommand(value);
+        focusInput();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (commandHistory.length > 0) {
+          if (historyIndex > 0) {
+            historyIndex--;
+          }
+          cmdInput.value = commandHistory[historyIndex] || "";
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (commandHistory.length > 0) {
+          if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            cmdInput.value = commandHistory[historyIndex];
+          } else {
+            historyIndex = commandHistory.length;
+            cmdInput.value = "";
+          }
+        }
+      }
+    });
+
+    // Auto-focus input on click anywhere on terminal
+    window.addEventListener("click", () => {
+      focusInput();
+    });
+
+    // Run boot sequence on page load
+    window.addEventListener("DOMContentLoaded", () => {
+      runBootSequence();
+    });
+  </script>
+</body>
+</html>
